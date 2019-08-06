@@ -1,0 +1,7 @@
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\bin\Release\UDPToInfluxDB.exe.config
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\bin\Release\UDPToInfluxDB.exe
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\bin\Release\UDPToInfluxDB.pdb
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\obj\Release\CSVToInfluxDB.csprojAssemblyReference.cache
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\obj\Release\CSVToInfluxDB.csproj.CoreCompileInputs.cache
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\obj\Release\UDPToInfluxDB.exe
+C:\Users\Amund\source\repos\CSVToInfluxDB\UDPToInfluxDB\obj\Release\UDPToInfluxDB.pdb
