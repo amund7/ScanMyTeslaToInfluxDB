@@ -7,7 +7,7 @@ using System.Text;
 
 namespace TeslaSCAN {
 
-  class Packet {
+  public class Packet {
     public int id;
     Parser parser;
     public List<Value> values;
@@ -32,7 +32,7 @@ namespace TeslaSCAN {
             double? d = val.formula(bytes);
             if (d!=null)
              parser.UpdateItem(val.name, val.unit, val.tag, val.index, (double)d, id); // This guy sorts by packet ID
-          } catch (Exception e) { Console.WriteLine(e.ToString()); }
+          } catch (Exception e) { /*Console.WriteLine(e.ToString());*/ }
     }
   }
 }

@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using CANBUS;
 using TeslaSCAN;
 
 namespace UDPToInfluxDB {
@@ -22,22 +23,39 @@ namespace UDPToInfluxDB {
     private string VIN;
     private string SW;
     private string BatterySerial;
+    private static Parser parser;
 
     public static void Main(string[] args) {
 
       System.Threading.Thread.CurrentThread.CurrentCulture =
         System.Globalization.CultureInfo.InvariantCulture;
 
-      DirectoryInfo dir = new DirectoryInfo(@"G:\Tesla logs");
-      //DirectoryInfo dir = new DirectoryInfo(@"F:\Prog\Google Drive\Tesla\Logger\Teslascan 0.9");
 
       var p = new Program();
 
-      foreach (var f in dir.GetFiles("*.txt"))
-        p.ReadRAW(f.FullName).Wait();
+      foreach (var arg in args) {
+        if (arg.ToLower() == "-models")
+          parser = new CANBUS.ModelSPackets(p);
+        else
+        if (arg.ToLower() == "-model3")
+          parser = new CANBUS.Model3Packets(p);
+        else {
+          /*Console.WriteLine(Path.GetFullPath(arg));
+          Console.WriteLine(Path.GetFileName(arg));*/
 
-      foreach (var f in dir.GetFiles("*.csv"))
-        p.ReadCSV(f.FullName).Wait();
+          foreach (var f in Directory.GetFiles(arg,"*.txt")) {
+            Console.WriteLine(f);
+            if (Path.GetExtension(f).ToLower()==".txt")
+              p.ReadRAW(f).Wait();
+            if (Path.GetExtension(f).ToLower() == ".csv")
+              p.ReadCSV(f).Wait();
+          }
+        }
+      }
+
+      //DirectoryInfo dir = new DirectoryInfo(@"G:\Tesla logs");
+      //DirectoryInfo dir = new DirectoryInfo(@"F:\Prog\Google Drive\Tesla\Logger\ScanMyModel3\Annas tlf");
+
 
     }
 
@@ -99,7 +117,7 @@ namespace UDPToInfluxDB {
         Console.WriteLine(filename);
         numWritten = 0;
 
-        ScanForVIN(filename);
+        //ScanForVIN(filename);
         Console.Write(" VIN:{0} FW:{1} Battery serial:{2} ", VIN, SW, BatterySerial);
 
         var f = File.OpenRead(filename);
@@ -112,7 +130,7 @@ namespace UDPToInfluxDB {
         timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
 
         file = file.Replace(" ", "_");
-        var parser = new Parser(this);
+        //var parser = new Parser(this);
 
         while (!stream.EndOfStream) {
           var line = stream.ReadLine();
@@ -197,9 +215,9 @@ namespace UDPToInfluxDB {
       content.Append(
         "measurement,name=" + name.Replace(" ", "\\ ") +
         ",file=" + file +
-        (VIN=="" ? "" : ",vin=" + VIN) +
+        /*(VIN=="" ? "" : ",vin=" + VIN) +
         (SW=="" ? "": ",fw=" + SW )+
-        (BatterySerial==""? "" : ",batteryser=" + BatterySerial )+
+        (BatterySerial==""? "" : ",batteryser=" + BatterySerial )+*/
         " value=" + d +
         " " + (timestamp).ToString() +
         "\n"
@@ -214,6 +232,7 @@ namespace UDPToInfluxDB {
 
     public async Task WriteBufferToDB(string buffer) {
       var response = await client.PostAsync("http://localhost:8086/write?db=SMT&precision=ms", new StringContent(buffer));
+      //var response = await client.PostAsync("http://localhost:8086/write?db=Model3&precision=ms", new StringContent(buffer));
       var responseString = await response.Content.ReadAsStringAsync();
       Console.Write(responseString);
       numWritten += 5;
