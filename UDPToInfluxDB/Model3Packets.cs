@@ -49,6 +49,7 @@ namespace CANBUS {
     private double drive;
     private double? cellVoltMax;
     private double? cellVoltMin;
+    private double? maxChargeCurrent;
 
     public Model3Packets(Program prog) : base(prog) {
 
@@ -124,17 +125,17 @@ namespace CANBUS {
       p.AddValue("R torque", "Nm", "p", (bytes) =>
         (bytes[5] + ((bytes[6] & 0x1F) << 8) - (512 * (bytes[6] & 0x10))) * 0.25);
 
-      /*packets.Add(0x108, p = new Packet(0x108, this));
+      packets.Add(0x108, p = new Packet(0x108, this));
       p.AddValue("R torque (108)", "Nm", "p", (bytes) =>
-        ExtractSignalFromBytes(bytes, 27, 13, true, .22222, 0));*/
+        ExtractSignalFromBytes(bytes, 27, 13, true, .22222, 0));
 
       /*packets.Add(0x154, p = new Packet(0x154, this));
       p.AddValue("Rr torque measured", "Nm", "p", (bytes) => torque =
          (bytes[5] + ((bytes[6] & 0x1F) << 8) - (512 * (bytes[6] & 0x10))) * 0.25);*/
 
-      /*packets.Add(0x108, p = new Packet(0x108, this));
+      //packets.Add(0x108, p = new Packet(0x108, this));
       p.AddValue("Rr motor RPM", "RPM", "",
-          (bytes) => rrpm = (bytes[5] + (bytes[6] << 8)) - (512 * (bytes[6] & 0x80)));*/
+          (bytes) => rrpm = (bytes[5] + (bytes[6] << 8)) - (512 * (bytes[6] & 0x80)));
 
       packets.Add(0x376, p = new Packet(0x376, this));
       p.AddValue("Inverter PCB temp", "C", "c",
@@ -150,11 +151,11 @@ namespace CANBUS {
       p.AddValue("Max discharge power", "KW", "b", (bytes) => (bytes[2] + (bytes[3] << 8)) / 100.0);
       p.AddValue("Max regen power", "KW", "b", (bytes) => (bytes[0] + (bytes[1] << 8)) / 100.0);
 
-      /*packets.Add(0x268, p = new Packet(0x268, this));
+      packets.Add(0x268, p = new Packet(0x268, this));
       p.AddValue("Sys max drive power", "kW", "b", (bytes) => (bytes[2]));
       p.AddValue("Sys max regen power", "kW", "b", (bytes) => (bytes[3]));
       p.AddValue("Sys max heat power", "kW", "b", (bytes) => (bytes[0] * 0.08));
-      p.AddValue("Sys heat power", "kW", "b", (bytes) => (bytes[1] * 0.08));*/
+      p.AddValue("Sys heat power", "kW", "b", (bytes) => (bytes[1] * 0.08));
 
       packets.Add(0x3FE, p = new Packet(0x3FE, this));
       p.AddValue("FL brake est", " C", "c", (bytes) =>
@@ -502,7 +503,87 @@ namespace CANBUS {
           , null);
 
   */
+
+      packets.Add(0x2D2, p = new Packet(0x2D2, this));
+      p.AddValue("Max pack voltage", "V", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 16, 16, false, 0.01, 0));
+      p.AddValue("Min pack voltage", "V", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 0, 16, false, 0.01, 0));
+      p.AddValue("Max discharge current", "A", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 48, 14, false, 0.128, 0));
+      p.AddValue("Max charge current", "A", "b", (bytes) =>
+        maxChargeCurrent = ExtractSignalFromBytes(bytes, 32, 16, false, 0.1, 0));
+      p.AddValue("Max charge power", "kW", "b", (bytes) =>
+        maxChargeCurrent * volt / 1000);
+
+
+      packets.Add(0x20C, p = new Packet(0x20C, this));
+      p.AddValue("Blower speed target", "RPM", "h", (bytes) =>
+        ExtractSignalFromBytes(bytes, 32, 10, false, 1, 0));
+      p.AddValue("Evap enabled", "0/1", "h", (bytes) =>
+        ExtractSignalFromBytes(bytes, 11, 1, false, 1, 0));
+      p.AddValue("Evap temp", "C", "h", (bytes) =>
+        ExtractSignalFromBytes(bytes, 13, 11, false, 0.1, -40));
+      p.AddValue("Evap target", "C", "h", (bytes) =>
+        ExtractSignalFromBytes(bytes, 24, 8, false, 0.2, 0));
+
+      packets.Add(0x2B3, p = new Packet(0x2B3, this));
+      p.AddValue("Duct left", "C", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 0)
+          return ExtractSignalFromBytes(bytes, 4, 9, false, .3, -40);
+        else return null;
+      });
+      p.AddValue("Duct right", "C", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 0)
+          return ExtractSignalFromBytes(bytes, 13, 9, false, .3, -40);
+        else return null;
+      });
+      p.AddValue("Heater left", "W", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 2)
+          return ExtractSignalFromBytes(bytes, 28, 10, false, 5, 0);
+        else return null;
+      });
+      p.AddValue("Heater right", "W", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 2)
+          return ExtractSignalFromBytes(bytes, 38, 10, false, 5, 0);
+        else return null;
+      });
+      p.AddValue("Cabin humidity", "%", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 2)
+          return ExtractSignalFromBytes(bytes, 20, 8, false, 1, 0);
+        else return null;
+      });
+      p.AddValue("Cabin temp probe", "C", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 0)
+          return ExtractSignalFromBytes(bytes, 24, 8, false, .5, -40);
+        else return null;
+      });
+      p.AddValue("Cabin temp mid", "C", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 0)
+          return ExtractSignalFromBytes(bytes, 32, 8, false, .5, -40);
+        else return null;
+      });
+      p.AddValue("Cabin temp deep", "C", "h", (bytes) => {
+        if ((bytes[0] & 0xF) == 0)
+          return ExtractSignalFromBytes(bytes, 40, 8, false, .5, -40);
+        else return null;
+      });
+
+
+      packets.Add(0x261, p = new Packet(0x261, this));
+      p.AddValue("12v battery volt", "V", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 0, 12, false, 0.00544368, 0));
+      p.AddValue("12v battery current", "A", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 48, 16, true, 0.005, 0));
+      p.AddValue("12v battery Amp hours", "Ah", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 32, 14, true, 0.01, 0));
+      p.AddValue("12v battery temp", "C", "b", (bytes) =>
+        ExtractSignalFromBytes(bytes, 16, 16, true, 0.01, 0));
+
     }
 
+
   }
+
 }
+

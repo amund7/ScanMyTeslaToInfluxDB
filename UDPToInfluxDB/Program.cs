@@ -43,7 +43,7 @@ namespace UDPToInfluxDB {
           /*Console.WriteLine(Path.GetFullPath(arg));
           Console.WriteLine(Path.GetFileName(arg));*/
 
-          foreach (var f in Directory.GetFiles(arg,"*.txt")) {
+          foreach (var f in Directory.GetFiles(arg,"*.txt").Reverse()) {
             Console.WriteLine(f);
             if (Path.GetExtension(f).ToLower()==".txt")
               p.ReadRAW(f).Wait();
@@ -130,7 +130,10 @@ namespace UDPToInfluxDB {
         timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
 
         file = file.Replace(" ", "_");
-        //var parser = new Parser(this);
+        if (parser is Model3Packets)
+          parser = new Model3Packets(this);
+        else
+          parser = new ModelSPackets(this);
 
         while (!stream.EndOfStream) {
           var line = stream.ReadLine();
@@ -223,7 +226,7 @@ namespace UDPToInfluxDB {
         "\n"
       );
 
-      if (queueLength >= 5000) {
+      if (queueLength >= 100000) {
         WriteBufferToDB(content.ToString());
         content.Clear();
         queueLength = 0;
@@ -235,7 +238,7 @@ namespace UDPToInfluxDB {
       //var response = await client.PostAsync("http://localhost:8086/write?db=Model3&precision=ms", new StringContent(buffer));
       var responseString = await response.Content.ReadAsStringAsync();
       Console.Write(responseString);
-      numWritten += 5;
+      numWritten += 100;
       Console.Write("\r{0}k ", numWritten);
     }
 

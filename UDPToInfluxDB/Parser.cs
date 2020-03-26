@@ -215,7 +215,7 @@ namespace TeslaSCAN {
     public void UpdateItem(string name, string unit, string tag, int index, double value, int id) {
 
       if (!Double.IsInfinity(value) && !Double.IsNaN(value)) { // influxDB does not support Infinity. Let's not waste time by getting that error back
-        program.SendToDBAsync(name, value, program.file, program.timestamp).Wait() ;
+        program.SendToDBAsync(name, value, program.file, program.timestamp);
       }
     }
 
