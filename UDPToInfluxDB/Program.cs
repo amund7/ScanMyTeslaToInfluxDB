@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Mail;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -24,6 +25,10 @@ namespace UDPToInfluxDB {
     private string SW;
     private string BatterySerial;
     private static Parser parser;
+    private static bool dryrun = false;
+    private static bool smt;
+    private static char separator=',';
+    private static string db = "http://localhost:8086/write?db=SMT&precision=ms";
 
     public static void Main(string[] args) {
 
@@ -33,22 +38,40 @@ namespace UDPToInfluxDB {
 
       var p = new Program();
 
-      foreach (var arg in args) {
-        if (arg.ToLower() == "-models")
+      for (var i=0; i<args.Length; i++) {
+        if (args[i].ToLower() == "-scanmytesla") // enable scan my tesla timestamp formats & parsing of file name dates
+          smt = true;
+        else
+        if (args[i].ToLower() == "-models")
           parser = new CANBUS.ModelSPackets(p);
         else
-        if (arg.ToLower() == "-model3")
+        if (args[i].ToLower() == "-model3")
           parser = new CANBUS.Model3Packets(p);
-        else {
-          /*Console.WriteLine(Path.GetFullPath(arg));
-          Console.WriteLine(Path.GetFileName(arg));*/
+        else
+          if (args[i].ToLower() == "-dryrun")
+          dryrun = true;
+        else 
+          if (args[i].ToLower() == "-separator") { 
+            separator = args[i + 1][0];
+            i++;
+          }
+        else
+        if (args[i].ToLower() == "-db")
+        {
+          db = args[i + 1];
+          i++;
+        }
+        else
+        {
 
-          foreach (var f in Directory.GetFiles(arg,"*.txt").Reverse()) {
+          foreach (var f in Directory.GetFiles(args[i], "*.csv").Reverse())
+          {
             Console.WriteLine(f);
-            if (Path.GetExtension(f).ToLower()==".txt")
+            if (Path.GetExtension(f).ToLower() == ".txt")
               p.ReadRAW(f).Wait();
             if (Path.GetExtension(f).ToLower() == ".csv")
               p.ReadCSV(f).Wait();
+
           }
         }
       }
@@ -56,10 +79,9 @@ namespace UDPToInfluxDB {
       //DirectoryInfo dir = new DirectoryInfo(@"G:\Tesla logs");
       //DirectoryInfo dir = new DirectoryInfo(@"F:\Prog\Google Drive\Tesla\Logger\ScanMyModel3\Annas tlf");
 
+      }
 
-    }
-
-    async Task ReadCSV(string filename) {
+      async Task ReadCSV(string filename) {
       try {
         Console.Write(filename);
         var f = File.OpenRead(filename);
@@ -69,15 +91,18 @@ namespace UDPToInfluxDB {
           //title += header;
           header = stream.ReadLine(); // VESC MOnitor first line is a summary/comment
         }
-        var columns = header.Split(',');
+        var columns = header.Split(separator);
         int columnCount = columns.Count();
         numWritten = 0;
 
         string file = Path.GetFileName(f.Name);
         string date = file.Substring(file.IndexOf('2'));
-        date = date.Substring(0, date.IndexOf('.'));
-        DateTime startTime = DateTime.ParseExact(date, "yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
-        long timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
+        if (smt)
+        {
+          date = date.Substring(0, date.IndexOf('.'));
+          DateTime startTime = DateTime.ParseExact(date, "yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
+          long timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
+        }
 
         file = file.Replace(" ", "_");
 
@@ -86,18 +111,25 @@ namespace UDPToInfluxDB {
           int i = 0;
           int t = 0;
 
-          foreach (var c in line.Split(',')) {
-            if (i == 0) {
+          foreach (var c in line.Split(separator)) {
+            
+            if (i == 0)
+              if (smt)
+            {
               int.TryParse(c, out t);
-              i++;
-              //Console.WriteLine(timestamp + t);
-              continue;
-            }
+                i++;
+                //Console.WriteLine(timestamp + t);
+                continue;
+              }
+            else {
+                  DateTime startTime = DateTime.Parse(c, CultureInfo.InvariantCulture);
+                  timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
+              }
             double d = 0;
 
             if (double.TryParse(c, out d)) {
               if (!Double.IsInfinity(d) && !Double.IsNaN(d)) { // influxDB does not support Infinity. Let's not waste time by getting that error back
-                SendToDBAsync(columns[i], d, file, timestamp + t).Wait();
+                await SendToDBAsync(columns[i], d, file, timestamp + t);
               }
             }
             i++;
@@ -123,17 +155,20 @@ namespace UDPToInfluxDB {
         var f = File.OpenRead(filename);
         var stream = new StreamReader(f);
 
-        file = Path.GetFileName(f.Name);
-        string date = file.Substring(file.IndexOf('2'));
-        date = date.Substring(0, date.IndexOf('.'));
-        DateTime startTime = DateTime.ParseExact(date, "yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
-        timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
+        if (smt)
+        {
+          file = Path.GetFileName(f.Name);
+          string date = file.Substring(file.IndexOf('2'));
+          date = date.Substring(0, date.IndexOf('.'));
+          DateTime startTime = DateTime.ParseExact(date, "yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
+          timestamp = ((DateTimeOffset)startTime).ToUnixTimeMilliseconds();
 
-        file = file.Replace(" ", "_");
-        if (parser is Model3Packets)
-          parser = new Model3Packets(this);
-        else
-          parser = new ModelSPackets(this);
+          file = file.Replace(" ", "_");
+          if (parser is Model3Packets)
+            parser = new Model3Packets(this);
+          else
+            parser = new ModelSPackets(this);
+        }
 
         while (!stream.EndOfStream) {
           var line = stream.ReadLine();
@@ -227,19 +262,25 @@ namespace UDPToInfluxDB {
       );
 
       if (queueLength >= 100000) {
-        WriteBufferToDB(content.ToString());
+        await WriteBufferToDB(content.ToString());
         content.Clear();
         queueLength = 0;
       }
     }
 
     public async Task WriteBufferToDB(string buffer) {
-      var response = await client.PostAsync("http://localhost:8086/write?db=SMT&precision=ms", new StringContent(buffer));
-      //var response = await client.PostAsync("http://localhost:8086/write?db=Model3&precision=ms", new StringContent(buffer));
-      var responseString = await response.Content.ReadAsStringAsync();
-      Console.Write(responseString);
-      numWritten += 100;
-      Console.Write("\r{0}k ", numWritten);
+      if (!dryrun)
+      {
+        var response = await client.PostAsync(db, new StringContent(buffer));
+        //var response = await client.PostAsync("http://localhost:8086/write?db=Model3&precision=ms", new StringContent(buffer));
+        var responseString = await response.Content.ReadAsStringAsync();
+        Console.Write(responseString);
+        numWritten += 100;
+        Console.Write("\r{0}k ", numWritten);
+      } else { 
+        Console.WriteLine(db + " -> "+ buffer);
+      
+      }
     }
 
 
